@@ -49,7 +49,7 @@ from datetime import datetime
 
 
 MAX_RECORDS            = 500   # keep the last N /vast requests per session
-FINALISE_IDLE_SECONDS  = 15.0  # break considered "done" after this much silence
+FINALISE_IDLE_SECONDS  = 8.0   # break considered "done" after this much silence
 
 # VAST tracking event -> fraction of ad duration considered played
 EVENT_FRACTIONS = {

@@ -99,7 +99,7 @@ var AUTOSAVE_DEBOUNCE_MS = 800;
 // player/simulator has been killed and finalise the break to history
 // with whatever events actually fired. Mirrors FINALISE_IDLE_SECONDS on
 // the backend so drift and history stay in agreement.
-var BREAK_IDLE_FINALISE_MS = 15000;
+var BREAK_IDLE_FINALISE_MS = 8000;
 
 var allAssets = [];
 var podAds = [];
@@ -151,7 +151,12 @@ function setupSessionControls() {
   var newBtn = document.getElementById("btn-new-session");
   if (newBtn) {
     newBtn.addEventListener("click", function() {
-      if (!confirm("Start a fresh session? Your current pod, break history and drift totals will be left behind.")) { return; }
+      if (!confirm(
+        "Start a fresh test session?\n\n"
+        + "Click this when you change channel on the player or restart playback — "
+        + "it gives you a clean slate with no leftover drift or break history.\n\n"
+        + "Your current pod, break history and drift totals will be left behind."
+      )) { return; }
       newSession();
     });
   }
@@ -1352,10 +1357,16 @@ function setupVastUrlTab() {
 }
 
 function updateVastUrlDisplay() {
+  // session_id is the one concrete value — it pins the URL to your
+  // test session. The other three are standard VAST macros that a
+  // compliant player will substitute on each break. Users pasting into
+  // a non-substituting player need to replace them by hand.
   var sid = encodeURIComponent(SESSION_ID || "default");
   var url = window.location.origin
     + "/vast?session_id=" + sid
-    + "&break_id=test&cb=CACHE_BUSTER&duration=60";
+    + "&break_id=[BREAKID]"
+    + "&cb=[CACHEBUSTING]"
+    + "&duration=[DURATION]";
   document.getElementById("vast-url-display").textContent = url;
 }
 

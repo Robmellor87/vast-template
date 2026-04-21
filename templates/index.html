@@ -4,13 +4,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VAST Test Platform</title>
+  <title>VAST Test Platform: Dynamic Break Duration</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
 
   <nav class="nav">
-    <span class="nav__brand">&#9889; VAST Test Platform</span>
+    <span class="nav__brand">&#9889; VAST Test Platform <span class="nav__brand-sub">: Dynamic Break Duration</span></span>
     <div class="nav__tabs">
       <button class="nav__tab nav__tab--active" data-tab="builder">Ad Pod Builder</button>
       <button class="nav__tab" data-tab="vasturl">VAST URL</button>
@@ -19,21 +19,24 @@
       <div
         id="session-chip"
         class="session-chip"
-        title="Your session. Every API call and tracking pixel is scoped to this ID so other testers on the same instance can't overwrite your state."
+        title="Your test session. Distinct from any session ID your CTV player emits — this one scopes every API call and tracking pixel to you so other testers on the same instance can't overwrite your state."
       >
-        <span class="session-chip__label">session</span>
+        <span class="session-chip__label">test&nbsp;session</span>
         <code id="session-chip-id" class="session-chip__id">&hellip;</code>
         <button
           id="btn-copy-session"
           class="session-chip__btn"
-          title="Copy session ID"
+          title="Copy test session ID"
         >Copy</button>
         <button
           id="btn-new-session"
           class="session-chip__btn session-chip__btn--danger"
-          title="Start a fresh, empty session"
-        >New</button>
+          title="Start a fresh test session — click when changing channel or restarting playback"
+        >New&nbsp;test</button>
       </div>
+      <span class="session-chip__hint">
+        Refresh on channel change or player restart
+      </span>
       <span id="autosave-indicator" class="autosave-indicator">&#10003; Saved</span>
     </div>
   </nav>
@@ -235,8 +238,17 @@
         Load this URL into your CTV ad server or test player.
         The response XML will always reflect the latest pod configuration.
         Changes to the pod are saved automatically.
-        Pass <code>&amp;duration=</code> with the pod size the player is trying
-        to fill (in seconds) to record EPG drift.
+      </p>
+      <p class="hint-text">
+        <strong>Values in brackets are placeholders.</strong>
+        A VAST-compliant player will substitute
+        <code>[BREAKID]</code>,
+        <code>[CACHEBUSTING]</code> and
+        <code>[DURATION]</code> for you on each break request.
+        For players that don't auto-substitute, replace them by hand with
+        the break ID, a cache-buster, and the pod duration the player is
+        trying to fill (in seconds). The <code>session_id</code> is
+        pinned to your browser and should be left as-is.
       </p>
       <div class="url-display">
         <code id="vast-url-display" class="url-display__code"></code>

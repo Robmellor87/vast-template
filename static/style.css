@@ -118,6 +118,12 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
+.nav__brand-sub {
+  font-weight: 500;
+  opacity: .72;
+  letter-spacing: 0;
+}
+
 .nav__tabs {
   display: flex;
   gap: .35rem;
@@ -199,6 +205,14 @@ body {
 .session-chip__btn--danger:hover {
   color: var(--danger);
   border-color: var(--danger-soft);
+}
+
+.session-chip__hint {
+  font-size: .68rem;
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: .8;
+  white-space: nowrap;
 }
 
 .autosave-indicator {

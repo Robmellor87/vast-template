@@ -1,4 +1,4 @@
-# VAST Test Platform
+# VAST Test Platform: Dynamic Break Duration
 
 A self-contained VAST 3.0 ad server and dashboard for testing CTV ad
 integrations — build ad pods, point a player at the VAST endpoint, watch
@@ -106,7 +106,7 @@ the ads it returned and the requested duration. As tracking pixels
 arrive, each ad's highest-so-far milestone ratchets upward; the played
 time for the break is the sum of `(highest_fraction × duration)` across
 ads. A break is finalised either when every ad hits `complete` or when
-it has been idle for 15 seconds (whichever comes first).
+it has been idle for 8 seconds (whichever comes first).
 
 ```
 drift = requested - played     (positive = under-fill)
@@ -135,7 +135,7 @@ Flask backend, vanilla-JS single-page frontend, no build step.
 - `app.py` — Flask routes, serves HTML + JSON + VAST XML.
 - `asset_library.py` — static list of creatives and their variant URLs.
 - `drift_store.py` — thread-safe drift / render-rate store. Pending
-  breaks finalise on completion or after 15s of silence.
+  breaks finalise on completion or after 8s of silence.
 - `vast_builder.py` — assembles the VAST 3.0 XML.
 - `tracker.py` — in-memory tracking event log.
 - `config_store.py` — in-memory pod configuration.
