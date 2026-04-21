@@ -16,6 +16,24 @@
       <button class="nav__tab" data-tab="vasturl">VAST URL</button>
     </div>
     <div class="nav__status">
+      <div
+        id="session-chip"
+        class="session-chip"
+        title="Your session. Every API call and tracking pixel is scoped to this ID so other testers on the same instance can't overwrite your state."
+      >
+        <span class="session-chip__label">session</span>
+        <code id="session-chip-id" class="session-chip__id">&hellip;</code>
+        <button
+          id="btn-copy-session"
+          class="session-chip__btn"
+          title="Copy session ID"
+        >Copy</button>
+        <button
+          id="btn-new-session"
+          class="session-chip__btn session-chip__btn--danger"
+          title="Start a fresh, empty session"
+        >New</button>
+      </div>
       <span id="autosave-indicator" class="autosave-indicator">&#10003; Saved</span>
     </div>
   </nav>

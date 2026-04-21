@@ -34,6 +34,13 @@ Over-fill (player rendered more than it asked for) shouldn't happen in
 the real world but is allowed here because the user can configure any
 pod. Those records are flagged with warning=True and contribute to the
 informational total_overfill counter only.
+
+Multi-session: the public `DriftStore` at the bottom of this file is a
+dispatcher keyed by session_id — one `_SessionDriftStore` instance per
+session, materialised on first touch. All public methods take a
+session_id so two testers hitting the same hosted instance can't see
+each other's pending breaks or cumulative totals. Unqualified requests
+route to a `"default"` session.
 """
 
 import threading
@@ -41,7 +48,7 @@ from collections import deque
 from datetime import datetime
 
 
-MAX_RECORDS            = 500   # keep the last N /vast requests
+MAX_RECORDS            = 500   # keep the last N /vast requests per session
 FINALISE_IDLE_SECONDS  = 15.0  # break considered "done" after this much silence
 
 # VAST tracking event -> fraction of ad duration considered played
@@ -55,8 +62,14 @@ EVENT_FRACTIONS = {
 }
 
 
-class DriftStore:
-    """Thread-safe rolling record of VAST-request fill."""
+# ---------------------------------------------------------------------------
+# Per-session state — the original single-session store, unchanged in
+# behaviour. Exists as a private class so the public DriftStore can
+# route per-session traffic to its own instance.
+# ---------------------------------------------------------------------------
+
+class _SessionDriftStore:
+    """Thread-safe rolling record of VAST-request fill for one session."""
 
     def __init__(self):
         self._records: deque = deque(maxlen=MAX_RECORDS)
@@ -308,3 +321,65 @@ class DriftStore:
             "warning":   entry.get("warning"),
             "pending":   entry.get("pending", False),
         }
+
+
+# ---------------------------------------------------------------------------
+# Public multi-session dispatcher
+# ---------------------------------------------------------------------------
+
+class DriftStore:
+    """
+    Thread-safe multi-session drift store.
+
+    Each session_id gets its own `_SessionDriftStore` with an independent
+    records deque, pending-break map, and cumulative totals. Session
+    state is created lazily on first touch. The outer-level lock only
+    guards the session dict — per-session operations rely on the inner
+    store's own lock, so unrelated sessions don't contend.
+    """
+
+    def __init__(self):
+        self._sessions: dict = {}
+        self._sessions_lock  = threading.Lock()
+
+    def _get(self, session_id: str) -> _SessionDriftStore:
+        with self._sessions_lock:
+            store = self._sessions.get(session_id)
+            if store is None:
+                store = _SessionDriftStore()
+                self._sessions[session_id] = store
+            return store
+
+    # ------------------------------------------------------------------
+    # Write
+    # ------------------------------------------------------------------
+
+    def record_request(
+        self,
+        session_id: str,
+        break_id: str,
+        requested: float | None,
+        pod_ads: list,
+    ) -> dict:
+        return self._get(session_id).record_request(break_id, requested, pod_ads)
+
+    def register_event(self, session_id: str, break_id: str, ad_id: str, event: str) -> None:
+        self._get(session_id).register_event(break_id, ad_id, event)
+
+    def touch(self, session_id: str, break_id: str) -> None:
+        self._get(session_id).touch(break_id)
+
+    def reset(self, session_id: str) -> None:
+        """Clear drift records and cumulative counters for one session.
+        Other sessions are untouched."""
+        self._get(session_id).reset()
+
+    # ------------------------------------------------------------------
+    # Read
+    # ------------------------------------------------------------------
+
+    def snapshot(self, session_id: str, limit: int = 100) -> dict:
+        return self._get(session_id).snapshot(limit=limit)
+
+    def by_break(self, session_id: str, break_id: str) -> dict | None:
+        return self._get(session_id).by_break(break_id)

@@ -148,7 +148,58 @@ body {
   box-shadow: 0 0 20px -4px var(--accent-glow);
 }
 
-.nav__status { display: flex; align-items: center; }
+.nav__status { display: flex; align-items: center; gap: .6rem; }
+
+/* --------------------------------------------------------------------------
+   Session chip
+   -------------------------------------------------------------------------- */
+
+.session-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .25rem .45rem .25rem .65rem;
+  border-radius: 99px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  font-size: .72rem;
+}
+
+.session-chip__label {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 500;
+}
+
+.session-chip__id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text);
+  letter-spacing: .02em;
+}
+
+.session-chip__btn {
+  font-size: .68rem;
+  padding: .2rem .5rem;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border-soft);
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+  font-weight: 500;
+}
+
+.session-chip__btn:hover {
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--bg);
+}
+
+.session-chip__btn--danger:hover {
+  color: var(--danger);
+  border-color: var(--danger-soft);
+}
 
 .autosave-indicator {
   font-size: .75rem;

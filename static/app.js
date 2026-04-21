@@ -1,5 +1,97 @@
 "use strict";
 
+// ---------------------------------------------------------------------------
+// Session identity
+// ---------------------------------------------------------------------------
+//
+// Every browser gets its own session_id so two people hitting the same
+// hosted instance can't see each other's pod edits, tracking events, or
+// drift. Resolution order on page load:
+//
+//   1. ?session_id= in the URL        (someone shared a link — honour it)
+//   2. vast_session_id in localStorage (returning visitor — keep stable)
+//   3. freshly generated               (first visit ever)
+//
+// Whichever one wins is written back to localStorage and reflected in
+// the URL bar via history.replaceState so the URL is always a bookmark
+// of the current session. Every /api/* and /vast fetch threads this
+// value through as a query param; tracking-pixel URLs baked into the
+// VAST XML carry it too, so the CTV player's pings route back to the
+// right session partition on arrival at /track.
+
+var SESSION_STORAGE_KEY = "vast_session_id";
+var SESSION_ID = null;
+
+function initSession() {
+  var urlParam = null;
+  try {
+    var params = new URLSearchParams(window.location.search);
+    urlParam = params.get("session_id");
+  } catch(e) { /* older browsers — fall through */ }
+
+  var stored = null;
+  try { stored = window.localStorage.getItem(SESSION_STORAGE_KEY); } catch(e) {}
+
+  var chosen = (urlParam && urlParam.trim()) || (stored && stored.trim()) || generateSessionId();
+
+  SESSION_ID = chosen;
+  try { window.localStorage.setItem(SESSION_STORAGE_KEY, chosen); } catch(e) {}
+
+  // Reflect the winner in the URL bar so sharing the link or bookmarking
+  // it preserves this session. Don't add a history entry — replaceState.
+  try {
+    var params2 = new URLSearchParams(window.location.search);
+    if (params2.get("session_id") !== chosen) {
+      params2.set("session_id", chosen);
+      var newUrl = window.location.pathname + "?" + params2.toString() + window.location.hash;
+      window.history.replaceState(null, "", newUrl);
+    }
+  } catch(e) {}
+}
+
+function generateSessionId() {
+  // 8 hex chars — plenty of space for a handful of testers, short
+  // enough to eyeball in the chip and type into a URL if needed.
+  try {
+    var buf = new Uint8Array(4);
+    window.crypto.getRandomValues(buf);
+    var out = "";
+    for (var i = 0; i < buf.length; i++) {
+      var h = buf[i].toString(16);
+      if (h.length < 2) { h = "0" + h; }
+      out += h;
+    }
+    return out;
+  } catch(e) {
+    // Fallback — non-crypto, but still unique enough for test traffic
+    return (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+  }
+}
+
+function newSession() {
+  var fresh = generateSessionId();
+  SESSION_ID = fresh;
+  try { window.localStorage.setItem(SESSION_STORAGE_KEY, fresh); } catch(e) {}
+  // Full reload so every piece of in-memory state (pod, history, drift
+  // cache) rebuilds against the new session from the backend.
+  var params = new URLSearchParams(window.location.search);
+  params.set("session_id", fresh);
+  window.location.search = params.toString();
+}
+
+// Append session_id to any URL we fetch. Preserves any existing query
+// string; if session_id is already present it gets overwritten with
+// the canonical one.
+function apiUrl(path) {
+  var sep = path.indexOf("?") === -1 ? "?" : "&";
+  var sid = encodeURIComponent(SESSION_ID || "default");
+  // If session_id already present, replace it. Otherwise append.
+  if (path.indexOf("session_id=") !== -1) {
+    return path.replace(/session_id=[^&]*/, "session_id=" + sid);
+  }
+  return path + sep + "session_id=" + sid;
+}
+
 var API = "";
 var POLL_INTERVAL_MS = 2000;
 var AUTOSAVE_DEBOUNCE_MS = 800;
@@ -23,6 +115,9 @@ var latestDriftSnapshot = null;
 var pageLoadTs = new Date().toISOString();  // ignore drift records older than this
 
 document.addEventListener("DOMContentLoaded", async function() {
+  initSession();          // resolve / generate session_id BEFORE any fetch
+  renderSessionChip();
+  setupSessionControls();
   initTabs();
   await loadAssets();
   await loadCurrentConfig();
@@ -35,6 +130,32 @@ document.addEventListener("DOMContentLoaded", async function() {
   startPolling();
   fetchDrift();  // initial populate
 });
+
+function renderSessionChip() {
+  var chip = document.getElementById("session-chip-id");
+  if (chip) { chip.textContent = SESSION_ID; }
+}
+
+function setupSessionControls() {
+  var copyBtn = document.getElementById("btn-copy-session");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", function() {
+      if (!SESSION_ID) { return; }
+      navigator.clipboard.writeText(SESSION_ID).then(function() {
+        var original = copyBtn.textContent;
+        copyBtn.textContent = "Copied";
+        setTimeout(function() { copyBtn.textContent = original; }, 1500);
+      }).catch(function() { /* clipboard may be blocked — no-op */ });
+    });
+  }
+  var newBtn = document.getElementById("btn-new-session");
+  if (newBtn) {
+    newBtn.addEventListener("click", function() {
+      if (!confirm("Start a fresh session? Your current pod, break history and drift totals will be left behind.")) { return; }
+      newSession();
+    });
+  }
+}
 
 function initTabs() {
   document.querySelectorAll(".nav__tab").forEach(function(btn) {
@@ -171,7 +292,7 @@ function applyFilters() {
 
 async function loadCurrentConfig() {
   try {
-    var res = await fetch("/api/config");
+    var res = await fetch(apiUrl("/api/config"));
     if (!res.ok) { throw new Error("HTTP " + res.status); }
     var config = await res.json();
     podAds = [];
@@ -247,7 +368,7 @@ async function saveConfig(showStatus) {
   var payload = { ads: ads };
 
   try {
-    var res = await fetch("/api/config", {
+    var res = await fetch(apiUrl("/api/config"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -508,7 +629,7 @@ function setupApplyReset() {
   });
   document.getElementById("btn-reset").addEventListener("click", async function() {
     if (!confirm("Reset to the default configuration?")) { return; }
-    await fetch("/api/config/reset", { method: "POST" });
+    await fetch(apiUrl("/api/config/reset"), { method: "POST" });
     await loadCurrentConfig();
     var statusEl = document.getElementById("apply-status");
     statusEl.className = "status-bar status-bar--ok";
@@ -646,7 +767,7 @@ function startPolling() {
 
 async function pollTrackingEvents() {
   try {
-    var url = "/api/events?limit=50";
+    var url = apiUrl("/api/events?limit=50");
     var res = await fetch(url);
     var data = await res.json();
     processNewEvents(data.events);
@@ -1231,7 +1352,10 @@ function setupVastUrlTab() {
 }
 
 function updateVastUrlDisplay() {
-  var url = window.location.origin + "/vast?break_id=test&cb=CACHE_BUSTER&duration=60";
+  var sid = encodeURIComponent(SESSION_ID || "default");
+  var url = window.location.origin
+    + "/vast?session_id=" + sid
+    + "&break_id=test&cb=CACHE_BUSTER&duration=60";
   document.getElementById("vast-url-display").textContent = url;
 }
 
@@ -1240,8 +1364,10 @@ async function fetchVastPreview() {
   pre.textContent = "Fetching...";
   try {
     // Don't pass ?duration= on the preview so it doesn't accumulate drift.
+    var sid = encodeURIComponent(SESSION_ID || "default");
     var url = window.location.origin
-      + "/vast?break_id=preview&cb=" + Date.now();
+      + "/vast?session_id=" + sid
+      + "&break_id=preview&cb=" + Date.now();
     var res = await fetch(url);
     var xml = await res.text();
     pre.textContent = xml;
@@ -1260,7 +1386,7 @@ function setupDriftControls() {
   btn.addEventListener("click", async function() {
     if (!confirm("Reset cumulative EPG drift to zero?")) { return; }
     try {
-      await fetch("/api/drift/reset", { method: "POST" });
+      await fetch(apiUrl("/api/drift/reset"), { method: "POST" });
       await fetchDrift();
       renderBreakHistory();  // refresh per-break drift columns too
     } catch(e) {
@@ -1271,7 +1397,7 @@ function setupDriftControls() {
 
 async function fetchDrift() {
   try {
-    var res = await fetch("/api/drift?limit=500");
+    var res = await fetch(apiUrl("/api/drift?limit=500"));
     if (!res.ok) { return; }
     var snap = await res.json();
     latestDriftSnapshot = snap;

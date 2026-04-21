@@ -20,15 +20,24 @@ import urllib.parse
 # Public entry point
 # ---------------------------------------------------------------------------
 
-def build_vast_response(config: dict, break_id: str, base_url: str) -> str:
+def build_vast_response(
+    config: dict,
+    break_id: str,
+    base_url: str,
+    session_id: str = "default",
+) -> str:
     """
     Build a VAST 3.0 AdPod XML string from the supplied configuration.
 
     Args:
-        config:    Current pod config ({"ads": [ad dicts]}). Returned pod
-                   duration is implicitly the sum of ad durations.
-        break_id:  Identifier for this ad break (used in tracking URLs)
-        base_url:  Public base URL of this service (for tracking pixels)
+        config:      Current pod config ({"ads": [ad dicts]}). Returned pod
+                     duration is implicitly the sum of ad durations.
+        break_id:    Identifier for this ad break (used in tracking URLs)
+        base_url:    Public base URL of this service (for tracking pixels)
+        session_id:  Session identifier — baked into every tracking pixel
+                     URL so pixels fired by the CTV player route back to
+                     the right session partition on arrival at /track.
+                     Defaults to "default" for backwards compatibility.
 
     Returns:
         UTF-8 XML string
@@ -38,7 +47,7 @@ def build_vast_response(config: dict, break_id: str, base_url: str) -> str:
     ads = sorted(config.get("ads", []), key=lambda a: a["sequence"])
 
     for ad in ads:
-        _build_inline_ad(root, ad, break_id, base_url)
+        _build_inline_ad(root, ad, break_id, base_url, session_id)
 
     return _pretty_xml(root)
 
@@ -52,6 +61,7 @@ def _build_inline_ad(
     ad: dict,
     break_id: str,
     base_url: str,
+    session_id: str,
 ) -> None:
     """Append an  element to the VAST root."""
 
@@ -71,7 +81,7 @@ def _build_inline_ad(
     SubElement(inline, "AdTitle").text  = title
 
     # ── Impression tracking pixel ─────────────────────────────────────────
-    imp_url = _tracking_url(base_url, "impression", ad_id, break_id, sequence)
+    imp_url = _tracking_url(base_url, "impression", ad_id, break_id, sequence, session_id)
     SubElement(inline, "Impression", id="imp_1").text = imp_url
 
     # ──  ───────────────────────────────────────────────────────
@@ -86,7 +96,7 @@ def _build_inline_ad(
     tracking_events = SubElement(linear, "TrackingEvents")
 
     for event in ("start", "firstQuartile", "midpoint", "thirdQuartile", "complete"):
-        url = _tracking_url(base_url, event, ad_id, break_id, sequence)
+        url = _tracking_url(base_url, event, ad_id, break_id, sequence, session_id)
         SubElement(tracking_events, "Tracking", event=event).text = url
 
     # ── Media file ────────────────────────────────────────────────────────
@@ -114,12 +124,14 @@ def _tracking_url(
     ad_id: str,
     break_id: str,
     sequence: int,
+    session_id: str,
 ) -> str:
     params = urllib.parse.urlencode({
-        "event":    event,
-        "ad_id":    ad_id,
-        "break_id": break_id,
-        "sequence": sequence,
+        "event":      event,
+        "ad_id":      ad_id,
+        "break_id":   break_id,
+        "sequence":   sequence,
+        "session_id": session_id,
     })
     return f"{base_url}/track?{params}"
 

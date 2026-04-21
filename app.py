@@ -45,6 +45,28 @@ tracking_store = TrackingStore()
 drift_store = DriftStore()
 
 # ---------------------------------------------------------------------------
+# Session helper
+# ---------------------------------------------------------------------------
+#
+# Every endpoint that touches per-session state reads ?session_id= off
+# the request. Unqualified requests (no session_id) route to a shared
+# "default" bucket so:
+#   - smoke-testing /vast in a browser tab without fiddling with params
+#     still works,
+#   - any CTV platform that strips unknown query params doesn't silently
+#     crash, it just lands in 'default'.
+# Two testers hitting the hosted instance each pick up their own
+# session_id from the frontend (generated + persisted to localStorage
+# on first load) and their state is fully isolated.
+
+DEFAULT_SESSION_ID = "default"
+
+
+def _session_id() -> str:
+    sid = request.args.get("session_id", "").strip()
+    return sid or DEFAULT_SESSION_ID
+
+# ---------------------------------------------------------------------------
 # VAST endpoint  –  this is the URL you load into your CTV platform
 # ---------------------------------------------------------------------------
 
@@ -53,23 +75,26 @@ def vast_endpoint():
     """
     Core VAST endpoint.
     Query params (all optional, primarily for logging/correlation):
+      ?session_id= - Per-tester / per-browser partition. Omitted = "default".
       ?break_id=   - Ad break identifier passed by the CTV platform
       ?cb=         - Cache-buster
       ?duration=   - Pod duration the player is trying to fill (seconds).
                      When supplied, the difference between this and the
                      total duration of returned ads is recorded as EPG drift.
     """
-    break_id = request.args.get("break_id", "default")
-    cb       = request.args.get("cb", "")
+    session_id = _session_id()
+    break_id   = request.args.get("break_id", "default")
+    cb         = request.args.get("cb", "")
     requested_duration = _parse_duration(request.args.get("duration"))
 
-    current_config = config_store.get()
+    current_config = config_store.get(session_id)
 
     # Actual duration we are returning = sum of ad durations (what will play)
     returned_duration = sum(ad.get("duration", 0) for ad in current_config["ads"])
 
     log.info(
-        "VAST request  break_id=%s  cb=%s  requested=%s  returned=%ss  ads=%d",
+        "VAST request  session=%s  break_id=%s  cb=%s  requested=%s  returned=%ss  ads=%d",
+        session_id,
         break_id,
         cb,
         f"{requested_duration}s" if requested_duration is not None else "-",
@@ -78,7 +103,7 @@ def vast_endpoint():
     )
 
     # Record that a VAST request was made (shows up in tracking dashboard)
-    tracking_store.add_event({
+    tracking_store.add_event(session_id, {
         "event":    "vast_request",
         "break_id": break_id,
         "ts":       datetime.utcnow().isoformat(),
@@ -90,6 +115,7 @@ def vast_endpoint():
     # played, so abandoning a pod mid-playback now correctly shows as
     # under-fill.
     drift_store.record_request(
+        session_id=session_id,
         break_id=break_id,
         requested=requested_duration,
         pod_ads=current_config["ads"],
@@ -99,6 +125,7 @@ def vast_endpoint():
         config=current_config,
         break_id=break_id,
         base_url=_base_url(),
+        session_id=session_id,
     )
 
     return Response(xml, mimetype="application/xml")
@@ -111,7 +138,7 @@ def vast_endpoint():
 @app.route("/api/config", methods=["GET"])
 def get_config():
     """Return the current pod configuration."""
-    return jsonify(config_store.get())
+    return jsonify(config_store.get(_session_id()))
 
 
 @app.route("/api/config", methods=["POST"])
@@ -135,25 +162,27 @@ def set_config():
 
     The pod's returned duration is always the sum of the ad durations.
     """
+    session_id = _session_id()
     body = request.get_json(force=True)
 
     errors = _validate_config(body)
     if errors:
         return jsonify({"ok": False, "errors": errors}), 400
 
-    config_store.set(body)
+    config_store.set(session_id, body)
     ads = body.get("ads", [])
     total = sum(ad.get("duration", 0) for ad in ads)
-    log.info("Config updated: ads=%d  total=%ss", len(ads), total)
+    log.info("Config updated: session=%s  ads=%d  total=%ss", session_id, len(ads), total)
 
-    return jsonify({"ok": True, "config": config_store.get()})
+    return jsonify({"ok": True, "config": config_store.get(session_id)})
 
 
 @app.route("/api/config/reset", methods=["POST"])
 def reset_config():
     """Reset to the default configuration."""
-    config_store.reset()
-    return jsonify({"ok": True, "config": config_store.get()})
+    session_id = _session_id()
+    config_store.reset(session_id)
+    return jsonify({"ok": True, "config": config_store.get(session_id)})
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +210,7 @@ def track():
       ?break_id=
       ?sequence=
     """
+    session_id = _session_id()
     event    = request.args.get("event",    "unknown")
     ad_id    = request.args.get("ad_id",    "unknown")
     break_id = request.args.get("break_id", "unknown")
@@ -195,15 +225,15 @@ def track():
         "ua":       request.headers.get("User-Agent", ""),
         "ip":       request.remote_addr,
     }
-    tracking_store.add_event(entry)
-    log.info("TRACK %s | ad=%s break=%s seq=%s", event, ad_id, break_id, sequence)
+    tracking_store.add_event(session_id, entry)
+    log.info("TRACK session=%s %s | ad=%s break=%s seq=%s", session_id, event, ad_id, break_id, sequence)
 
     # Feed the drift store so played-duration reflects reality. Every
     # recognised VAST milestone credits a fraction of the ad's duration
     # (0% at impression/start, 25/50/75% at the quartiles, 100% at
     # complete). An SSAI skip or transcode failure mid-ad now surfaces
     # as accurate seconds-level drift rather than a binary 0-or-full.
-    drift_store.register_event(break_id=break_id, ad_id=ad_id, event=event)
+    drift_store.register_event(session_id=session_id, break_id=break_id, ad_id=ad_id, event=event)
 
     # Return a 1×1 transparent GIF (some players expect an image response)
     return Response(
@@ -226,14 +256,14 @@ def get_events():
     ad_id  = request.args.get("ad_id",  None)
     event  = request.args.get("event",  None)
 
-    events = tracking_store.query(limit=limit, ad_id=ad_id, event=event)
+    events = tracking_store.query(_session_id(), limit=limit, ad_id=ad_id, event=event)
     return jsonify(events)
 
 
 @app.route("/api/events/clear", methods=["POST"])
 def clear_events():
     """Clear all stored tracking events."""
-    tracking_store.clear()
+    tracking_store.clear(_session_id())
     return jsonify({"ok": True})
 
 
@@ -249,13 +279,13 @@ def get_drift():
       ?limit=   max number of per-request records to return (default 100)
     """
     limit = int(request.args.get("limit", 100))
-    return jsonify(drift_store.snapshot(limit=limit))
+    return jsonify(drift_store.snapshot(_session_id(), limit=limit))
 
 
 @app.route("/api/drift/reset", methods=["POST"])
 def reset_drift():
     """Clear drift records and reset the cumulative counter."""
-    drift_store.reset()
+    drift_store.reset(_session_id())
     return jsonify({"ok": True})
 
 
