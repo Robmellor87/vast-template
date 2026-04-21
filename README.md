@@ -142,9 +142,44 @@ Flask backend, vanilla-JS single-page frontend, no build step.
 - `simulate_playout.py` — CLI simulator that fires VAST and tracking
   pixels against a running server.
 - `templates/index.html`, `static/app.js`, `static/style.css` — frontend.
+- `Procfile` — tells Railway (and any Procfile-aware PaaS) how to boot
+  the service: `gunicorn app:app --bind 0.0.0.0:$PORT`.
 
 All state except `.sim_break_counter` is in-memory. Restarting the Flask
-process resets pod config, event log, drift totals, and break history.
+process — or a Railway redeploy / container restart — resets pod config,
+event log, drift totals, and break history. Cumulative drift and
+render-rate counters reset with it.
+
+## Deploying to Railway
+
+The project is set up to deploy as-is:
+
+1. Push the repo to GitHub.
+2. In Railway, **New Project → Deploy from GitHub** and pick the repo.
+3. Railway auto-detects Python, installs `requirements.txt`, and boots
+   the service via the `Procfile` under gunicorn.
+4. Once deployed, note the public URL Railway assigns (e.g.
+   `https://vast-template-production.up.railway.app`).
+5. Add a service variable `BASE_URL` set to that URL. Without it the
+   tracking-pixel URLs baked into the VAST XML will use whatever host
+   header the request came in on, which usually works but is safer to
+   pin.
+
+The gunicorn process binds to `0.0.0.0:$PORT` where `$PORT` is injected
+by Railway — there is no port to configure manually.
+
+### Pointing the simulator at a hosted instance
+
+`simulate_playout.py` targets `http://localhost:5000` by default. To
+fire pixels against a Railway-hosted instance, set `SIM_BASE_URL`:
+
+```bash
+SIM_BASE_URL=https://vast-template-production.up.railway.app \
+  python simulate_playout.py
+```
+
+(`BASE_URL` is also honoured as a fallback so one env var can drive
+both the server and the simulator in local hybrid setups.)
 
 ## Asset hosting
 
@@ -161,6 +196,9 @@ URLs per asset when real files are available.
 
 ## Environment variables
 
-| Variable   | Default        | Description                                                       |
-|------------|----------------|-------------------------------------------------------------------|
-| `BASE_URL` | auto-detected  | Public URL of this service, used to build tracking pixel URLs     |
+| Variable       | Read by             | Default            | Description                                                                                 |
+|----------------|---------------------|--------------------|---------------------------------------------------------------------------------------------|
+| `PORT`         | `app.py`            | `5000`             | Port the Flask dev server binds to. Railway injects this automatically for the gunicorn boot.|
+| `FLASK_DEBUG`  | `app.py`            | off                | `1`/`true` enables Flask debug + auto-reloader. Leave off on hosted deployments.            |
+| `BASE_URL`     | `app.py`            | request host       | Public URL of this service, used to build tracking-pixel URLs inside the VAST XML.          |
+| `SIM_BASE_URL` | `simulate_playout`  | `http://localhost:5000` | Target server for the simulator. Falls back to `BASE_URL` if unset, then to localhost. |

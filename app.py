@@ -13,6 +13,7 @@ Provides:
 from flask import Flask, request, Response, jsonify, render_template
 from flask_cors import CORS
 import logging
+import os
 from datetime import datetime
 
 from config_store import ConfigStore
@@ -274,9 +275,10 @@ def index():
 def _base_url() -> str:
     """
     The public base URL of this service.
-    In production set the BASE_URL environment variable.
+    In production set the BASE_URL environment variable (Railway deploys
+    should set this to the public service URL so tracking-pixel URLs
+    baked into the VAST XML resolve back here).
     """
-    import os
     return os.environ.get("BASE_URL", request.host_url.rstrip("/"))
 
 
@@ -331,6 +333,27 @@ _TRANSPARENT_GIF = (
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+#
+# In production this module is loaded by gunicorn via the Procfile, so
+# the block below only runs for local `python app.py` invocations. Both
+# paths honour the same env vars so behaviour is consistent:
+#
+#   PORT         - port to bind (Railway injects this automatically;
+#                  falls back to 5000 locally)
+#   FLASK_DEBUG  - "1"/"true" enables Flask's auto-reloader + error
+#                  pages. Off by default so hosted deployments don't
+#                  leak tracebacks.
+#   BASE_URL     - public URL used when building tracking-pixel URLs
+#                  inside the VAST XML. See _base_url() above.
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    port  = int(os.environ.get("PORT", "5000"))
+    debug = _env_flag("FLASK_DEBUG", default=False)
+    app.run(debug=debug, host="0.0.0.0", port=port)

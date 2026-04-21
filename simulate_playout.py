@@ -12,7 +12,12 @@ import requests
 import time
 import json
 
-BASE_URL   = "http://localhost:5000"
+# Target server. Defaults to localhost for local dev; set SIM_BASE_URL
+# (or BASE_URL) to point the simulator at a Railway-hosted instance
+# without editing this file — e.g.
+#     SIM_BASE_URL=https://vast-template.up.railway.app python simulate_playout.py
+BASE_URL = os.environ.get("SIM_BASE_URL") or os.environ.get("BASE_URL") or "http://localhost:5000"
+BASE_URL = BASE_URL.rstrip("/")
 
 # Persistent break-id counter. Incremented every time we start a new
 # break, and stored next to this script so successive runs (and a mid-
