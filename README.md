@@ -168,18 +168,10 @@ The project is set up to deploy as-is:
 The gunicorn process binds to `0.0.0.0:$PORT` where `$PORT` is injected
 by Railway — there is no port to configure manually.
 
-### Pointing the simulator at a hosted instance
-
-`simulate_playout.py` targets `http://localhost:5000` by default. To
-fire pixels against a Railway-hosted instance, set `SIM_BASE_URL`:
-
-```bash
-SIM_BASE_URL=https://vast-template-production.up.railway.app \
-  python simulate_playout.py
-```
-
-(`BASE_URL` is also honoured as a fallback so one env var can drive
-both the server and the simulator in local hybrid setups.)
+The simulator (`simulate_playout.py`) is a local-only dev aid for
+exercising the pipeline without a CTV platform attached — it always
+targets `http://localhost:5000`. Hosted instances should only receive
+traffic from real players.
 
 ## Asset hosting
 
@@ -196,9 +188,8 @@ URLs per asset when real files are available.
 
 ## Environment variables
 
-| Variable       | Read by             | Default            | Description                                                                                 |
-|----------------|---------------------|--------------------|---------------------------------------------------------------------------------------------|
-| `PORT`         | `app.py`            | `5000`             | Port the Flask dev server binds to. Railway injects this automatically for the gunicorn boot.|
-| `FLASK_DEBUG`  | `app.py`            | off                | `1`/`true` enables Flask debug + auto-reloader. Leave off on hosted deployments.            |
-| `BASE_URL`     | `app.py`            | request host       | Public URL of this service, used to build tracking-pixel URLs inside the VAST XML.          |
-| `SIM_BASE_URL` | `simulate_playout`  | `http://localhost:5000` | Target server for the simulator. Falls back to `BASE_URL` if unset, then to localhost. |
+| Variable      | Default       | Description                                                                                  |
+|---------------|---------------|----------------------------------------------------------------------------------------------|
+| `PORT`        | `5000`        | Port the server binds to. Railway injects this automatically for the gunicorn boot.          |
+| `FLASK_DEBUG` | off           | `1`/`true` enables Flask debug + auto-reloader. Leave off on hosted deployments.             |
+| `BASE_URL`    | request host  | Public URL of this service, used to build tracking-pixel URLs inside the VAST XML.           |
