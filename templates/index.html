@@ -134,6 +134,14 @@
 
           <div id="tv-preview" class="tv-preview" aria-live="polite">
             <div class="tv-preview__screen">
+              <video
+                id="tv-preview-video"
+                class="tv-preview__video"
+                muted
+                playsinline
+                preload="auto"
+                aria-hidden="true"
+              ></video>
               <div class="tv-preview__scanlines" aria-hidden="true"></div>
               <div class="tv-preview__noise" aria-hidden="true"></div>
               <div class="tv-preview__idle">

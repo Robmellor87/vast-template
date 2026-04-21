@@ -1158,6 +1158,18 @@ function updateTvPreviewForActiveAd(seq) {
   timer.textContent = "0:00 / " + formatTvTime(dur);
   fill.style.width = "0%";
   root.classList.add("tv-preview--playing");
+
+  // Kick the creative. The timer/progress bar remains driven by our
+  // local elapsed clock so it stays in sync with the EPG strip — the
+  // video's own playhead may drift a few hundred ms from that, which
+  // is fine. If there's no variant (shouldn't happen with R2 assets
+  // but belt-and-braces) we just leave the gradient showing through.
+  var variantUrl = ad
+    && ad.variants
+    && ad.variants.length > 0
+    && ad.variants[0].url
+    ? ad.variants[0].url : null;
+  setPreviewVideoSrc(variantUrl);
 }
 
 function updateTvPreviewTick(elapsed, curDur) {
@@ -1188,6 +1200,42 @@ function resetTvPreview() {
   if (title) { title.textContent = "\u2014"; }
   if (seqEl) { seqEl.textContent = "\u2014"; }
   if (timer) { timer.textContent = "0:00 / 0:00"; }
+  setPreviewVideoSrc(null);
+}
+
+// Swap the preview video. Called when the active ad changes or when
+// the break finalises (null clears the src). Guards against reloading
+// the same URL twice in a row — a fresh .src= + .load() triggers a
+// network request and a decode race, which is what gives you the
+// "black flash" between otherwise-smooth clips.
+var _currentPreviewVideoUrl = null;
+function setPreviewVideoSrc(url) {
+  var video = document.getElementById("tv-preview-video");
+  if (!video) { return; }
+
+  if (!url) {
+    _currentPreviewVideoUrl = null;
+    try { video.pause(); } catch(e) {}
+    try { video.removeAttribute("src"); video.load(); } catch(e) {}
+    return;
+  }
+
+  if (_currentPreviewVideoUrl === url) {
+    // Same asset already loaded (e.g. same creative repeats in pod) —
+    // just rewind rather than re-fetching.
+    try { video.currentTime = 0; } catch(e) {}
+  } else {
+    _currentPreviewVideoUrl = url;
+    video.src = url;
+    try { video.load(); } catch(e) {}
+  }
+
+  var p = video.play();
+  if (p && typeof p.then === "function") {
+    // Autoplay can be blocked (e.g. no page interaction yet on some
+    // browsers) — that's benign, the gradient shows instead.
+    p.catch(function() {});
+  }
 }
 
 function updateEpgNowLabel() {
