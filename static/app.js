@@ -1435,12 +1435,15 @@ function setupVastUrlTab() {
 function updateVastUrlDisplay() {
   // session_id is the one concrete value — it pins the URL to your
   // test session. The other three are standard VAST macros that a
-  // compliant player will substitute on each break. Users pasting into
-  // a non-substituting player need to replace them by hand.
+  // compliant player will substitute on each break. break_id uses
+  // [CACHEBUSTER] rather than a bespoke [BREAKID] — a cachebuster
+  // value is unique per request, which is all the tool needs to
+  // correlate tracking pixels with a break, and [CACHEBUSTER] is
+  // widely supported where [BREAKID] often isn't.
   var sid = encodeURIComponent(SESSION_ID || "default");
   var url = window.location.origin
     + "/vast?session_id=" + sid
-    + "&break_id=[BREAKID]"
+    + "&break_id=[CACHEBUSTER]"
     + "&cb=[CACHEBUSTING]"
     + "&duration=[DURATION]";
   document.getElementById("vast-url-display").textContent = url;

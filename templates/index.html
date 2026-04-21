@@ -244,11 +244,16 @@
       <p class="hint-text">
         <strong>Values in brackets are placeholders.</strong>
         A VAST-compliant player will substitute
-        <code>[BREAKID]</code>,
+        <code>[CACHEBUSTER]</code>,
         <code>[CACHEBUSTING]</code> and
-        <code>[DURATION]</code> for you on each break request.
-        For players that don't auto-substitute, replace them by hand with
-        the break ID, a cache-buster, and the pod duration the player is
+        <code>[DURATION]</code> for you on each break request. Both
+        <code>break_id</code> and <code>cb</code> take cache-buster
+        values &mdash; a unique token per request is all the tool
+        needs to correlate tracking pixels with a break, and
+        cache-buster macros are more widely supported than a
+        dedicated break-ID macro. For players that don't
+        auto-substitute, replace them by hand with a fresh token,
+        another fresh token, and the pod duration the player is
         trying to fill (in seconds). The <code>session_id</code> is
         pinned to your browser and should be left as-is.
       </p>
