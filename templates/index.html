@@ -1,0 +1,236 @@
+<html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VAST Test Platform</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <nav class="nav">
+    <span class="nav__brand">&#9889; VAST Test Platform</span>
+    <div class="nav__tabs">
+      <button class="nav__tab nav__tab--active" data-tab="builder">Ad Pod Builder</button>
+      <button class="nav__tab" data-tab="vasturl">VAST URL</button>
+    </div>
+    <div class="nav__status">
+      <span id="autosave-indicator" class="autosave-indicator">&#10003; Saved</span>
+    </div>
+  </nav>
+
+  <section id="tab-builder" class="tab tab--active">
+
+    <div class="builder-layout">
+
+      <aside class="panel panel--library">
+        <h2 class="panel__title">Asset Library</h2>
+        <div class="filter-bar">
+          <select id="filter-duration" class="filter-bar__select">
+            <option value="">All Durations</option>
+            <option value="6">6s</option>
+            <option value="15">15s</option>
+            <option value="20">20s</option>
+            <option value="30">30s</option>
+          </select>
+          <input
+            id="filter-search"
+            class="filter-bar__input"
+            type="text"
+            placeholder="Search assets..."
+          />
+        </div>
+        <ul id="asset-list" class="asset-list">
+          <li class="asset-list__empty">Loading assets...</li>
+        </ul>
+      </aside>
+
+      <main class="panel panel--pod">
+        <h2 class="panel__title">
+          Ad Pod
+          <span id="pod-ad-count" class="pod-count-badge">0 ads</span>
+        </h2>
+
+        <div class="pod-controls">
+          <div class="pod-reference">
+            <div class="pod-reference__item">
+              <span class="pod-reference__label">Ads total</span>
+              <span id="pod-ads-total" class="pod-reference__value">0s</span>
+            </div>
+            <div class="pod-reference__item">
+              <span class="pod-reference__label">Player last requested</span>
+              <span id="pod-last-requested" class="pod-reference__value">&mdash;</span>
+              <span id="pod-last-requested-when" class="pod-reference__sub"></span>
+            </div>
+            <div class="pod-reference__item">
+              <span class="pod-reference__label">Fill vs request</span>
+              <span id="pod-fill-status" class="pod-reference__value">&mdash;</span>
+            </div>
+          </div>
+
+          <div class="pod-meter">
+            <div class="pod-meter__bar">
+              <div id="pod-fill" class="pod-meter__fill"></div>
+            </div>
+          </div>
+
+          <div id="overfill-warning" class="overfill-warning" hidden>
+            <strong>Over-fill risk.</strong>
+            <span id="overfill-warning-text"></span>
+          </div>
+        </div>
+
+        <div
+          id="drop-zone"
+          class="drop-zone"
+          role="list"
+          aria-label="Ad pod - drag assets here"
+        >
+          <p class="drop-zone__hint">Drag assets from the library into the pod or use the + button</p>
+        </div>
+
+        <div class="pod-actions">
+          <button id="btn-apply" class="btn btn--primary btn--sm">Force Save</button>
+          <button id="btn-reset" class="btn btn--ghost btn--sm">Reset to Default</button>
+          <button
+            id="btn-randomise"
+            class="btn btn--ghost btn--sm"
+            disabled
+            title="Waiting for a VAST request so we know the duration cap"
+          >Randomise</button>
+        </div>
+
+        <div id="apply-status" class="status-bar" role="alert" aria-live="polite"></div>
+      </main>
+
+      <div class="live-column">
+        <aside class="panel panel--live">
+          <h2 class="panel__title">
+            Live Pod View
+            <span id="live-indicator" class="live-dot live-dot--idle" title="Waiting for events"></span>
+          </h2>
+
+          <div id="tv-preview" class="tv-preview" aria-live="polite">
+            <div class="tv-preview__screen">
+              <div class="tv-preview__scanlines" aria-hidden="true"></div>
+              <div class="tv-preview__noise" aria-hidden="true"></div>
+              <div class="tv-preview__idle">
+                <span class="tv-preview__channel-label">&#9679; LIVE CHANNEL</span>
+                <span class="tv-preview__idle-hint">Waiting for ad break</span>
+              </div>
+              <div class="tv-preview__active">
+                <div class="tv-preview__badge">
+                  <span class="tv-preview__badge-label">AD</span>
+                  <span id="tv-preview-seq" class="tv-preview__badge-seq">&mdash;</span>
+                </div>
+                <div id="tv-preview-title" class="tv-preview__title">&mdash;</div>
+                <div id="tv-preview-timer" class="tv-preview__timer">0:00 / 0:00</div>
+              </div>
+              <div class="tv-preview__progress" aria-hidden="true">
+                <div id="tv-preview-progress-fill" class="tv-preview__progress-fill"></div>
+              </div>
+            </div>
+            <p class="tv-preview__hint">
+              Synthesised playback analogue &mdash; mirrors what the player would be rendering right now.
+            </p>
+          </div>
+
+          <div id="epg-strip" class="epg-strip">
+            <div class="epg-strip__viewport">
+              <div id="epg-track" class="epg-strip__track"></div>
+              <div class="epg-strip__cursor">
+                <span class="epg-strip__cursor-label">LIVE</span>
+              </div>
+            </div>
+            <div id="epg-now-label" class="epg-strip__now"></div>
+          </div>
+
+          <div class="live-controls">
+            <button id="btn-clear-live" class="btn btn--ghost btn--sm">Clear View</button>
+          </div>
+        </aside>
+
+        <section class="drift-mini" id="drift-mini">
+          <div class="drift-mini__header">
+            <span class="drift-mini__label">EPG Drift</span>
+            <span id="drift-value" class="drift-mini__value">0s</span>
+            <button id="btn-reset-drift" class="drift-mini__reset" title="Reset rolling drift">Reset</button>
+          </div>
+          <div class="drift-mini__epg" aria-hidden="true">
+            <div class="drift-mini__show drift-mini__show--a">
+              <span class="drift-mini__show-label">Program A</span>
+            </div>
+            <div class="drift-mini__show drift-mini__show--b">
+              <span class="drift-mini__show-label">Program B</span>
+            </div>
+            <div id="drift-live-edge" class="drift-mini__edge" style="left: 50%">
+              <span class="drift-mini__edge-label">LIVE</span>
+            </div>
+          </div>
+          <p class="drift-mini__hint">
+            Live edge pushes into Program B as drift accumulates. Reset clears the rolling sum.
+          </p>
+        </section>
+
+        <section class="render-mini" id="render-mini">
+          <div class="render-mini__header">
+            <span class="render-mini__label">Render Rate</span>
+            <span id="render-rate-value" class="render-mini__value render-mini__value--none">&mdash;</span>
+          </div>
+          <div class="render-mini__bar" aria-hidden="true">
+            <div id="render-rate-bar" class="render-mini__fill" style="width: 0%"></div>
+          </div>
+          <div class="render-mini__meta">
+            <span id="render-rate-totals" class="render-mini__totals">0s played / 0s returned</span>
+            <span id="render-rate-breaks" class="render-mini__breaks">0 breaks</span>
+          </div>
+          <p class="render-mini__hint">
+            Stream-level yield: seconds rendered &divide; seconds shipped across all finalised breaks.
+          </p>
+        </section>
+      </div>
+
+    </div>
+
+    <div class="history-section">
+      <div class="history-header">
+        <h2 class="history-title">&#128203; Break History</h2>
+        <div class="history-controls">
+          <span id="break-count-label" class="break-count-label">0 breaks recorded</span>
+          <button id="btn-clear-history" class="btn btn--ghost btn--sm">Clear History</button>
+        </div>
+      </div>
+      <div id="break-history" class="break-history">
+        <div class="break-history__empty">
+          No breaks recorded yet. Play an ad break on your CTV platform to see history here.
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <section id="tab-vasturl" class="tab">
+    <div class="panel panel--centered">
+      <h2>Your VAST Endpoint</h2>
+      <p class="hint-text">
+        Load this URL into your CTV ad server or test player.
+        The response XML will always reflect the latest pod configuration.
+        Changes to the pod are saved automatically.
+        Pass <code>&amp;duration=</code> with the pod size the player is trying
+        to fill (in seconds) to record EPG drift.
+      </p>
+      <div class="url-display">
+        <code id="vast-url-display" class="url-display__code"></code>
+        <button id="btn-copy-url" class="btn btn--primary btn--sm">Copy</button>
+      </div>
+      <h3>VAST XML Preview</h3>
+      <pre id="vast-preview" class="code-block">Click Fetch Preview to load current VAST XML</pre>
+      <button id="btn-fetch-vast" class="btn btn--ghost">Fetch Preview</button>
+    </div>
+  </section>
+
+  <script src="/static/app.js"></script>
+
+</body>
+</html>
