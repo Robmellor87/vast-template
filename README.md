@@ -150,6 +150,16 @@ process — or a Railway redeploy / container restart — resets pod config,
 event log, drift totals, and break history. Cumulative drift and
 render-rate counters reset with it.
 
+The Procfile deliberately runs gunicorn with `--workers 1 --threads 4`.
+A single worker means a single in-memory store shared by every request;
+spinning up a second worker would give each its own copy of the drift /
+tracking / config stores, and round-robin routing would cause the
+dashboard to flicker between "full data" and "empty" as polls bounced
+between workers. Threads cover concurrency within the one worker —
+enough for the handful of sporadic users this tool is aimed at. If the
+tool ever needs to scale, swap the in-memory stores for Redis before
+adding workers.
+
 ## Deploying to Railway
 
 The project is set up to deploy as-is:
