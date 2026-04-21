@@ -112,16 +112,13 @@ body {
   font-weight: 700;
   font-size: 1.05rem;
   letter-spacing: -.02em;
-  background: linear-gradient(90deg, #fff 20%, var(--accent) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text);
 }
 
 .nav__brand-sub {
   font-weight: 500;
-  opacity: .72;
   letter-spacing: 0;
+  color: inherit;
 }
 
 .nav__tabs {
@@ -311,8 +308,7 @@ body {
   margin-bottom: .75rem;
 }
 
-.filter-bar__select,
-.filter-bar__input {
+.filter-bar__select {
   flex: 1;
   padding: .45rem .7rem;
   border: 1px solid var(--border);
@@ -323,14 +319,11 @@ body {
   transition: border-color .15s, box-shadow .15s;
 }
 
-.filter-bar__select:focus,
-.filter-bar__input:focus {
+.filter-bar__select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: var(--shadow-glow);
 }
-
-.filter-bar__input::placeholder { color: var(--text-faint); }
 
 .asset-list {
   list-style: none;

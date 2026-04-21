@@ -273,24 +273,18 @@ function renderAssets(assets) {
 
 function setupFilterListeners() {
   var durSelect = document.getElementById("filter-duration");
-  var searchInput = document.getElementById("filter-search");
+  // Clone-and-replace to strip any listener renderAssets() may have
+  // previously attached (renderAssets is re-called after every filter
+  // change, so without the clone we'd pile up handlers).
   var newDur = durSelect.cloneNode(true);
-  var newSearch = searchInput.cloneNode(true);
   durSelect.parentNode.replaceChild(newDur, durSelect);
-  searchInput.parentNode.replaceChild(newSearch, searchInput);
   newDur.addEventListener("change", applyFilters);
-  newSearch.addEventListener("input", applyFilters);
 }
 
 function applyFilters() {
   var dur = document.getElementById("filter-duration").value;
-  var search = document.getElementById("filter-search").value.toLowerCase();
   var filtered = allAssets.filter(function(a) {
-    var matchDur = !dur || a.duration === parseInt(dur, 10);
-    var matchSearch = !search
-      || a.name.toLowerCase().indexOf(search) !== -1
-      || a.description.toLowerCase().indexOf(search) !== -1;
-    return matchDur && matchSearch;
+    return !dur || a.duration === parseInt(dur, 10);
   });
   renderAssets(filtered);
 }
