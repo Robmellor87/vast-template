@@ -1,130 +1,92 @@
 """
 Asset library.
 
-Each asset represents a video creative.  Multi-bitrate assets carry a
-`variants` list; single-rendition assets carry a single entry.
+Each asset represents a video creative. Assets carry a `variants`
+list — a single-rendition entry today, but the VAST builder iterates
+this list, so dropping in a multi-bitrate ladder later is a
+field-level change rather than a code change.
 
-Replace the placeholder URLs with real CDN/storage URLs when you have
-a hosting solution in place.
+Creatives are hosted on Cloudflare R2 (public bucket). All files are
+single-rendition 1920×1080 MP4s at a medium-quality 1080p bitrate.
+Duration is encoded as the leading number in each filename
+(e.g. `25s_Q77B_ad.mp4` is 25 seconds).
 """
 
 
 # ---------------------------------------------------------------------------
 # Asset definitions
 # ---------------------------------------------------------------------------
-#
-# Naming convention for placeholder URLs:
-#   https://assets.placeholder.example.com//x_kbps.mp4
-#
-# Resolutions targeted:
-#   - 1920×1080 (1080p)  – primary CTV resolution
-#   - 1280×720  (720p)   – mid-tier / bandwidth constrained
-#   - 640×360   (360p)   – low bandwidth fallback
-#
-# Durations: 6 s, 15 s, 20 s, 30 s
-# ---------------------------------------------------------------------------
 
-_BASE = "https://assets.placeholder.example.com"
+_BASE = "https://pub-f4f95ac7eb384df3985e9d27daf244f6.r2.dev"
 
-def _variants(asset_id: str, width_height_pairs=None) -> list:
-    """Generate multi-bitrate variant list for a given asset."""
-    if width_height_pairs is None:
-        width_height_pairs = [
-            (1920, 1080, 5000),
-            (1280,  720, 2500),
-            ( 640,  360,  800),
-        ]
+
+def _single_rendition(filename: str, bitrate_kbps: int = 5000) -> list:
+    """
+    Build a single-rendition variants list for a 1920×1080 creative.
+
+    Bitrate defaults to 5000 kbps — a reasonable approximation for the
+    "medium quality 1080p" bucket these files are encoded at. The
+    value is only used to populate the VAST `<MediaFile bitrate="…">`
+    attribute; it does not influence playback.
+    """
     return [
         {
-            "url":          f"{_BASE}/{asset_id}/{w}x{h}_{br}kbps.mp4",
+            "url":          f"{_BASE}/{filename}",
             "mime_type":    "video/mp4",
-            "width":        w,
-            "height":       h,
-            "bitrate_kbps": br,
+            "width":        1920,
+            "height":       1080,
+            "bitrate_kbps": bitrate_kbps,
         }
-        for w, h, br in width_height_pairs
     ]
 
 
 _ASSETS = [
-    # ── 6-second spots ───────────────────────────────────────────────────
-    {
-        "asset_id":    "asset_001",
-        "name":        "Brand Bumper – 6s",
-        "duration":    6,
-        "description": "Short brand bumper, ideal for pre-roll or pod cap.",
-        "tags":        ["6s", "bumper"],
-        "thumbnail":   f"{_BASE}/asset_001/thumb.jpg",
-        "variants":    _variants("asset_001"),
-    },
-    {
-        "asset_id":    "asset_002",
-        "name":        "Product Flash – 6s",
-        "duration":    6,
-        "description": "6-second product highlight.",
-        "tags":        ["6s", "bumper"],
-        "thumbnail":   f"{_BASE}/asset_002/thumb.jpg",
-        "variants":    _variants("asset_002"),
-    },
-
-    # ── 15-second spots ───────────────────────────────────────────────────
-    {
-        "asset_id":    "asset_003",
-        "name":        "Promo Spot A – 15s",
-        "duration":    15,
-        "description": "Standard 15-second promotional creative.",
-        "tags":        ["15s"],
-        "thumbnail":   f"{_BASE}/asset_003/thumb.jpg",
-        "variants":    _variants("asset_003"),
-    },
-    {
-        "asset_id":    "asset_004",
-        "name":        "Promo Spot B – 15s",
-        "duration":    15,
-        "description": "Alternate 15-second creative.",
-        "tags":        ["15s"],
-        "thumbnail":   f"{_BASE}/asset_004/thumb.jpg",
-        "variants":    _variants("asset_004"),
-    },
-
     # ── 20-second spots ───────────────────────────────────────────────────
     {
-        "asset_id":    "asset_005",
-        "name":        "Demo Reel – 20s",
+        "asset_id":    "asset_freestyle_20s",
+        "name":        "Freestyle – 20s",
         "duration":    20,
-        "description": "20-second product demo.",
+        "description": "Freestyle product spot, 20 seconds.",
         "tags":        ["20s"],
-        "thumbnail":   f"{_BASE}/asset_005/thumb.jpg",
-        "variants":    _variants("asset_005"),
+        "variants":    _single_rendition("20s_freestyle_ad.mp4"),
+    },
+
+    # ── 25-second spots ───────────────────────────────────────────────────
+    {
+        "asset_id":    "asset_q77b_25s",
+        "name":        "Q77B – 25s",
+        "duration":    25,
+        "description": "Q77B product spot, 25 seconds.",
+        "tags":        ["25s"],
+        "variants":    _single_rendition("25s_Q77B_ad.mp4"),
+    },
+
+    # ── 28-second spots ───────────────────────────────────────────────────
+    {
+        "asset_id":    "asset_s95f_oled_28s",
+        "name":        "S95F OLED – 28s",
+        "duration":    28,
+        "description": "S95F OLED product spot, 28 seconds.",
+        "tags":        ["28s", "oled"],
+        "variants":    _single_rendition("28s_S95F_OLED_ad.mp4"),
     },
 
     # ── 30-second spots ───────────────────────────────────────────────────
     {
-        "asset_id":    "asset_006",
-        "name":        "Brand Story – 30s",
+        "asset_id":    "asset_promo_30s",
+        "name":        "Promo – 30s",
         "duration":    30,
-        "description": "Full 30-second brand narrative.",
-        "tags":        ["30s"],
-        "thumbnail":   f"{_BASE}/asset_006/thumb.jpg",
-        "variants":    _variants("asset_006"),
+        "description": "General promo, 30 seconds.",
+        "tags":        ["30s", "promo"],
+        "variants":    _single_rendition("30_promo.mp4"),
     },
     {
-        "asset_id":    "asset_007",
-        "name":        "Product Deep-Dive – 30s",
+        "asset_id":    "asset_ai_promo_30s",
+        "name":        "AI Promo – 30s",
         "duration":    30,
-        "description": "Detailed 30-second product walkthrough.",
-        "tags":        ["30s"],
-        "thumbnail":   f"{_BASE}/asset_007/thumb.jpg",
-        "variants":    _variants("asset_007"),
-    },
-    {
-        "asset_id":    "asset_008",
-        "name":        "Campaign Hero – 30s",
-        "duration":    30,
-        "description": "Hero campaign creative, 30 seconds.",
-        "tags":        ["30s", "hero"],
-        "thumbnail":   f"{_BASE}/asset_008/thumb.jpg",
-        "variants":    _variants("asset_008"),
+        "description": "AI-themed promo, 30 seconds.",
+        "tags":        ["30s", "promo", "ai"],
+        "variants":    _single_rendition("30s_ai_promo.mp4"),
     },
 ]
 

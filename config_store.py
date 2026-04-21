@@ -16,13 +16,17 @@ _asset_lib = AssetLibrary()
 # ---------------------------------------------------------------------------
 # Default configuration – a single 30 s ad
 # ---------------------------------------------------------------------------
+#
+# Points at a real R2-hosted creative so the very first /vast hit after
+# a cold start returns playable XML without requiring the user to build
+# a pod first.
 
 _DEFAULT_CONFIG = {
     "ads": [
         {
             "ad_id":    "ad_default_001",
             "title":    "Default Test Ad (30s)",
-            "asset_id": "asset_001",
+            "asset_id": "asset_ai_promo_30s",
             "duration": 30,
             "sequence": 1,
         }
