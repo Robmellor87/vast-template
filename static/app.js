@@ -801,7 +801,6 @@ function processNewEvents(events) {
   var newEvents = [];
   for (var i = 0; i < events.length; i++) {
     var e = events[i];
-    if (e.event === "vast_request") { continue; }
     if (!lastEventTs || e.ts > lastEventTs) {
       newEvents.push(e);
     }
@@ -813,10 +812,45 @@ function processNewEvents(events) {
   lastEventTs = newEvents[newEvents.length - 1].ts;
 
   for (var i = 0; i < newEvents.length; i++) {
-    handleTrackingEvent(newEvents[i]);
+    var ev = newEvents[i];
+    if (ev.event === "vast_request") {
+      // A vast_request is the earliest signal that a break is underway.
+      // We open a shell now (with an empty ads map) so empty-pod breaks
+      // still land in history via the idle watchdog. Real tracking
+      // pixels for the same break_id populate the shell on arrival.
+      handleVastRequest(ev);
+    } else {
+      handleTrackingEvent(ev);
+    }
   }
 
   updateLiveView();
+}
+
+function handleVastRequest(e) {
+  var breakId = e.break_id || "unknown";
+
+  // A new break_id supersedes the last — push the previous break to
+  // history before it can be mistaken for part of this one.
+  if (currentBreakId && currentBreakId !== breakId) {
+    finaliseBreak(currentBreakId);
+  }
+  currentBreakId = breakId;
+
+  if (!currentBreakEvents[breakId]) {
+    currentBreakEvents[breakId] = {
+      break_id:    breakId,
+      started:     e.ts,
+      updated:     e.ts,
+      lastLocalMs: Date.now(),
+      ads:         {}
+    };
+  } else {
+    // Re-request for the same break_id (rare — the simulator ratchets
+    // the counter) — refresh the watermark so it isn't timed out.
+    currentBreakEvents[breakId].updated     = e.ts;
+    currentBreakEvents[breakId].lastLocalMs = Date.now();
+  }
 }
 
 function handleTrackingEvent(e) {
@@ -1374,11 +1408,15 @@ async function fetchVastPreview() {
   var pre = document.getElementById("vast-preview");
   pre.textContent = "Fetching...";
   try {
-    // Don't pass ?duration= on the preview so it doesn't accumulate drift.
+    // ?inspect=1 tells the backend "I'm peeking, don't log this" so the
+    // preview doesn't open a pending break on the drift store or pile a
+    // phantom vast_request event into the tracking log. Without it, every
+    // click here would drop an empty break into history 8s later.
     var sid = encodeURIComponent(SESSION_ID || "default");
     var url = window.location.origin
       + "/vast?session_id=" + sid
-      + "&break_id=preview&cb=" + Date.now();
+      + "&break_id=preview&cb=" + Date.now()
+      + "&inspect=1";
     var res = await fetch(url);
     var xml = await res.text();
     pre.textContent = xml;

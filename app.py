@@ -86,6 +86,10 @@ def vast_endpoint():
     break_id   = request.args.get("break_id", "default")
     cb         = request.args.get("cb", "")
     requested_duration = _parse_duration(request.args.get("duration"))
+    # ?inspect=1 says "I just want to read the XML, don't pollute stats".
+    # Used by the dashboard's Fetch Preview button so clicking it doesn't
+    # pile up phantom rows in break history or drag down render rate.
+    inspect = _truthy(request.args.get("inspect"))
 
     current_config = config_store.get(session_id)
 
@@ -93,33 +97,37 @@ def vast_endpoint():
     returned_duration = sum(ad.get("duration", 0) for ad in current_config["ads"])
 
     log.info(
-        "VAST request  session=%s  break_id=%s  cb=%s  requested=%s  returned=%ss  ads=%d",
+        "VAST request  session=%s  break_id=%s  cb=%s  requested=%s  returned=%ss  ads=%d%s",
         session_id,
         break_id,
         cb,
         f"{requested_duration}s" if requested_duration is not None else "-",
         returned_duration,
         len(current_config["ads"]),
+        "  [inspect]" if inspect else "",
     )
 
-    # Record that a VAST request was made (shows up in tracking dashboard)
-    tracking_store.add_event(session_id, {
-        "event":    "vast_request",
-        "break_id": break_id,
-        "ts":       datetime.utcnow().isoformat(),
-    })
+    if not inspect:
+        # Record that a VAST request was made (shows up in tracking dashboard)
+        tracking_store.add_event(session_id, {
+            "event":    "vast_request",
+            "break_id": break_id,
+            "ts":       datetime.utcnow().isoformat(),
+        })
 
-    # Record EPG drift for this request. The record starts "pending" and
-    # is finalised once every returned ad has fired complete, or after an
-    # idle timeout — whichever comes first. Drift = requested - actually
-    # played, so abandoning a pod mid-playback now correctly shows as
-    # under-fill.
-    drift_store.record_request(
-        session_id=session_id,
-        break_id=break_id,
-        requested=requested_duration,
-        pod_ads=current_config["ads"],
-    )
+        # Record EPG drift for this request. The record starts "pending" and
+        # is finalised once every returned ad has fired complete, or after an
+        # idle timeout — whichever comes first. Drift = requested - actually
+        # played, so abandoning a pod mid-playback now correctly shows as
+        # under-fill. Empty pods (zero ads returned) still create a record
+        # here, so an under-filled break surfaces in both drift totals and
+        # the break history rather than silently inflating drift only.
+        drift_store.record_request(
+            session_id=session_id,
+            break_id=break_id,
+            requested=requested_duration,
+            pod_ads=current_config["ads"],
+        )
 
     xml = build_vast_response(
         config=current_config,
@@ -381,6 +389,13 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _truthy(raw) -> bool:
+    """Parse a boolean-ish query param value. Empty/missing = False."""
+    if raw is None:
+        return False
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
 
 
 if __name__ == "__main__":
